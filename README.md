@@ -45,7 +45,7 @@ nexalance-claude-code-kit/
 
 ### Step 1: Clone this repo
 ```bash
-git clone https://github.com/YOUR_USERNAME/nexalance-claude-code-kit.git ~/Desktop/nexalance-kit
+git clone https://github.com/developerjillur/nexalance-claude-code-kit.git ~/Desktop/nexalance-kit
 cd ~/Desktop/nexalance-kit
 chmod +x setup-nexalance.sh setup-project-wing.sh
 ```
@@ -78,7 +78,21 @@ Open Claude Code panel in VS Code → type:
 ```
 Start project
 ```
-**That's it!** Claude Code reads your CLAUDE.md, analyzes your PRD, generates 9 documents, and starts building — all automatically.
+
+> **Claude Code may ask:** "What would you like to start?" or "Is this a new project?"
+> 
+> **Reply with this:**
+> ```
+> This is a new project. Read the CLAUDE.md in the project root and follow the Phase 0 initialization protocol. The PRD is in docs/PRD.md which references the PRD files in docs/ folder. Read all of them and generate all 9 documents as instructed in CLAUDE.md.
+> ```
+
+After that, Claude Code will automatically:
+1. Read your CLAUDE.md (2,350+ lines of instructions)
+2. Read your PRD file(s)
+3. Generate 9 documents (DESIGN, TAD, SCHEMA, API, RULES, FEATURES, TASKS, TESTING, SESSION)
+4. Print summary
+5. Ask: "Ready for Phase 1. Say 'Go' to start building."
+6. Type **"Go"** → development starts!
 
 ---
 
@@ -173,6 +187,9 @@ your-project/
 2. Open Claude Code panel (Spark icon in sidebar)
 3. Type: "Continue" or "Resume"
 4. Claude Code loads MemPalace memory → reads SESSION.md → resumes exact task
+
+Note: If Claude Code asks what to do, reply:
+"Read the CLAUDE.md and docs/SESSION.md, then resume where you left off."
 ```
 
 ### Switch projects
