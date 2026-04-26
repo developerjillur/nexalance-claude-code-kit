@@ -360,6 +360,76 @@ Scenario: Client's WordPress admin panel
 
 ---
 
+## 🕸️ CODEBASE KNOWLEDGE GRAPH (Graphify — optional add-on)
+
+### Why this exists:
+On large codebases, Glob/Grep/Read burns context fast. Graphify pre-builds a knowledge graph of code structure, docs, and concepts so Claude Code can **query** instead of **re-read**. Claims ~71x fewer tokens per structural query vs raw file reads.
+
+**Graphify covers a different layer than MemPalace:**
+- **MemPalace** = episodic memory (decisions, conversations, what we did)
+- **Graphify** = semantic index (what the code IS — classes, deps, call graph, doc concepts)
+- **SESSION.md** = current task state
+
+All three are complementary. Use them together.
+
+### Installation (opt-in, ONCE per machine):
+```bash
+bash ~/Desktop/nexalance-kit/setup-graphify.sh
+```
+This installs the `graphifyy` PyPI package and registers the `/graphify` slash command in Claude Code.
+
+### Per-project seeding (run ONCE after Phase 0):
+```
+/graphify .
+```
+Produces `./graphify-out/` containing `graph.json`, `graph.html`, `GRAPH_REPORT.md`, and a SHA256 cache.
+
+### MANDATORY USAGE RULE (when graphify-out/ exists in the project):
+
+**BEFORE running Glob/Grep against >20 files**, do this:
+1. Check if `./graphify-out/graph.json` exists.
+2. If yes → query it FIRST: `/graphify query "your question"` or read `graph.json` for structural answers.
+3. Only fall back to Glob/Grep/Read for content that the graph cannot answer.
+
+**Examples — use Graphify (not Glob/Grep) for these:**
+- "Where is X called from?" → `/graphify path "X" "<caller>"`
+- "What modules depend on auth?" → query graph.json
+- "What concepts are in the /docs folder?" → read GRAPH_REPORT.md
+- "What are the god nodes (most-connected modules)?" → GRAPH_REPORT.md
+- Onboarding a new chat to a large codebase → load GRAPH_REPORT.md first
+
+**Examples — Graphify will NOT help, use file tools:**
+- Reading the literal contents of a specific known file
+- Editing code (Graphify is read-only; index, not editor)
+- Anything time-sensitive (graph may be stale — see refresh rule below)
+
+### Graph freshness rule:
+- Run `/graphify . --update` after merging any branch that touched >5 files.
+- The SHA256 cache means re-runs only process changed files (cheap).
+- If a query returns surprising/empty results, suspect staleness → run `--update`.
+- Every relationship is tagged `EXTRACTED` (literal), `INFERRED` (with confidence), or `AMBIGUOUS`. Trust EXTRACTED, verify INFERRED, flag AMBIGUOUS.
+
+### Cross-repo queries (multi-project):
+```
+/graphify clone https://github.com/some/dependency
+/graphify merge-graphs ./graphify-out/graph.json ~/.graphify/repos/some/dependency/graphify-out/graph.json
+```
+Use this when debugging integration issues across our repos and external libraries.
+
+### .gitignore for graphify-out/:
+```
+graphify-out/cache/
+# Optional: commit graph.json + GRAPH_REPORT.md so teammates / future sessions
+# get instant context without re-running. Recommended for stable repos.
+```
+
+### When NOT to install Graphify:
+- Project < 10 files or single-file scripts (overkill)
+- Greenfield project with almost no code yet (nothing to index)
+- Pure design/PRD work before any implementation
+
+---
+
 ## ⚡ CONTEXT WINDOW MANAGEMENT (CRITICAL)
 
 Claude Code has a limited context window. Follow these rules to avoid losing track:

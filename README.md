@@ -32,12 +32,63 @@ A **production-ready CLAUDE.md system** that solves the biggest problems develop
 
 ```
 nexalance-claude-code-kit/
-├── NexaLance-CLAUDE-v4.3-SUPREME.md    ← Master CLAUDE.md template (2,350+ lines)
-├── setup-nexalance.sh                   ← One-time machine setup script
-├── setup-project-wing.sh                ← Per-project setup script
+├── NexaLance-CLAUDE-v4.4-LITE.md       ← ⭐ Slim core (~6K tokens) + lazy-loaded playbooks
+├── NexaLance-CLAUDE-v4.3-FINAL.md       ← Legacy monolithic template (~24K tokens)
+├── diagnose-mempalace.sh                ← ⭐ NEW: 12-check MemPalace health diagnostic
+├── playbooks/                           ← 11 lazy-loaded modules (read on demand)
+│   ├── phase-0.md                       ← Phase 0 doc generation (tier-aware)
+│   ├── feature-workflow.md              ← Feature implementation + phase-based dev
+│   ├── testing.md                       ← Action-Level Testing protocol
+│   ├── browser-automation.md            ← Playwright CLI + Chrome DevTools
+│   ├── self-review-full.md              ← 7-category fallback (escalation only)
+│   ├── session-management.md            ← Session start/middle/end + Exit Gate
+│   ├── persistent-memory.md             ← MemPalace setup + wing protocol
+│   ├── plugin-orchestration.md          ← Plugin priority + conflict matrix
+│   ├── patterns.md                      ← Common + anti-patterns
+│   ├── operations.md                    ← File routing + deployment + rollback + conflicts
+│   └── mempalace-troubleshooting.md     ← ⭐ NEW: MemPalace symptom→cause→fix reference
+├── hooks/                               ← ⭐ NEW: v4.4 LITE enforcement hooks
+│   ├── playbook-tracker.sh              ← Counts playbook reads/turn, warns if > 2
+│   ├── cache-warn.sh                    ← Warns when CLAUDE.md edited mid-session
+│   └── reset-counter.sh                 ← Resets counter on each new turn
+├── setup-nexalance.sh                   ← One-time machine setup
+├── setup-project-wing.sh                ← Per-project setup (tier-aware, wires hooks)
+├── setup-graphify.sh                    ← Optional: codebase knowledge graph
+├── migrate-to-v44.sh                    ← ⭐ NEW: Safe v4.3 → v4.4 LITE migration
 ├── README.md                            ← This file
 └── LICENSE                              ← MIT License
 ```
+
+---
+
+## ⭐ v4.4 LITE — 70% Fewer Tokens, Zero Quality Compromise
+
+**v4.4 LITE** is the recommended template for new projects. It splits the v4.3 monolith into:
+
+- A slim **core CLAUDE.md** (~7K tokens — was ~24K) loaded every session
+- **10 lazy-loaded playbooks** under `playbooks/` — Claude reads only the one matching the current task
+
+| Metric | v4.3 FINAL | **v4.4 LITE** | Saving |
+|---|---|---|---|
+| CLAUDE.md baseline load | ~24K tokens | **~7K tokens** | -71% |
+| Routine feature session | 80-120K | **25-40K** | ~65-70% |
+| Quality bar | 8.5/10 self-review | **Same — preserved** | 0 |
+
+**5 optimizations baked in (every rule from v4.3 preserved):**
+
+1. **Slim core + lazy-loaded playbooks** — read at most ONE playbook per task (enforced by hook ⭐)
+2. **Tiered Phase 0** — `lite` (3 docs) / `standard` (6) / `full` (9) instead of always-9
+3. **Risk-tiered review** — inline 5-question check for routine, escalates to 5-agent only for security-sensitive / pre-PR
+4. **Inline self-review (no extra LLM pass)** — saves ~2-4K per task; 7-category fallback still available when escalated
+5. **Haiku subagent dispatch** for cheap auxiliary tasks (doc updates, status reports, routine commits)
+
+Plus:
+- **Prompt-cache discipline** with a hook that warns on mid-session CLAUDE.md edits ⭐
+- **Playwright snapshot optimization** — `--interactive-only` after first full snapshot
+- **Tier-aware feature tracking** — `SESSION.md` → Feature Tracker for Lite/Standard, dedicated `FEATURES.md` for Full ⭐
+- **Routing enforcement hook** — counts playbook reads per turn, warns if > 2 ⭐
+
+⭐ = post-review hardening (review identified gaps; these close them)
 
 ---
 
@@ -47,7 +98,7 @@ nexalance-claude-code-kit/
 ```bash
 git clone https://github.com/developerjillur/nexalance-claude-code-kit.git ~/Desktop/nexalance-kit
 cd ~/Desktop/nexalance-kit
-chmod +x setup-nexalance.sh setup-project-wing.sh
+chmod +x setup-nexalance.sh setup-project-wing.sh setup-graphify.sh
 ```
 
 ### Step 2: Run machine setup (one time only)
@@ -56,21 +107,27 @@ bash setup-nexalance.sh
 ```
 This installs: Superpowers, MemPalace, Code Review, Feature Dev, Frontend Design, Playwright CLI, Chrome DevTools MCP, Vercel Design Guidelines, and auto-save hooks.
 
-### Step 3: Set up your first project
+### Step 3: Set up your first project (recommended — v4.4 LITE)
 ```bash
 mkdir -p ~/projects/my-project && cd ~/projects/my-project
 
-# Copy the master CLAUDE.md
-cp ~/Desktop/nexalance-kit/NexaLance-CLAUDE-v4.3-SUPREME.md ./CLAUDE.md
+# Copy the LITE core + playbooks
+cp ~/Desktop/nexalance-kit/NexaLance-CLAUDE-v4.4-LITE.md ./CLAUDE.md
+cp -r ~/Desktop/nexalance-kit/playbooks ./playbooks
 
-# Initialize project with isolated memory wing
-bash ~/Desktop/nexalance-kit/setup-project-wing.sh "my-project" "My Awesome Project" "client-name"
+# Initialize project with isolated memory wing + tier
+# Tier: lite | standard (default) | full
+bash ~/Desktop/nexalance-kit/setup-project-wing.sh "my-project" "My Awesome Project" "client-name" standard
 
-# Add your PRD
-# Put your Product Requirements Document in docs/PRD.md
-
+# Add your PRD in docs/PRD.md
 # Open in VS Code
 code .
+```
+
+**Or use legacy v4.3 monolithic template (no playbooks needed):**
+```bash
+cp ~/Desktop/nexalance-kit/NexaLance-CLAUDE-v4.3-FINAL.md ./CLAUDE.md
+bash ~/Desktop/nexalance-kit/setup-project-wing.sh "my-project" "My Awesome Project" "client-name"
 ```
 
 ### Step 4: Start building
@@ -93,6 +150,58 @@ After that, Claude Code will automatically:
 4. Print summary
 5. Ask: "Ready for Phase 1. Say 'Go' to start building."
 6. Type **"Go"** → development starts!
+
+---
+
+## 🕸️ Optional Add-On: Graphify (Codebase Knowledge Graph)
+
+For **large or multi-language codebases**, add Graphify — a knowledge-graph index over your code, docs, papers, and images. Claude Code queries the graph instead of re-reading files, claiming ~71× fewer tokens per structural query.
+
+**Layer model:**
+
+| Layer | Tool | Purpose |
+|-------|------|---------|
+| Episodic ("what we did") | **MemPalace** | conversation memory, decisions, per-project wings |
+| Semantic ("what the code IS") | **Graphify** | classes, deps, call graph, doc concepts |
+| Session state | **SESSION.md / HANDOFF.md** | current task, next step |
+
+### Install (one time, after `setup-nexalance.sh`)
+```bash
+bash ~/Desktop/nexalance-kit/setup-graphify.sh
+```
+Installs the `graphifyy` PyPI package and registers `/graphify` as a slash command in Claude Code.
+
+### Use it (per project)
+```bash
+# Inside Claude Code, after Phase 0 docs are generated:
+/graphify .
+
+# Result: ./graphify-out/ with graph.json, graph.html, GRAPH_REPORT.md, cache/
+```
+
+### Common queries
+```
+/graphify query "how does the auth flow work?"
+/graphify path "LoginForm" "sessionStore"
+/graphify .  --update                       # incremental refresh
+/graphify clone https://github.com/foo/bar  # index an external repo
+/graphify merge-graphs g1.json g2.json      # cross-repo graph
+```
+
+### When to add it
+- ✅ Codebase >30k LOC, multi-language, lots of `/docs` PDFs/specs
+- ✅ Frequently asked architectural questions ("where is X called from?")
+- ✅ New chat sessions need fast orientation on existing code
+- ❌ Skip for tiny projects, greenfield/empty repos, or pure PRD work
+
+The CLAUDE.md template includes a rule that tells Claude Code to **query `graph.json` BEFORE Glob/Grep on >20 files** when `graphify-out/` exists. No action needed beyond installing.
+
+### .gitignore additions per project
+```
+graphify-out/cache/
+# Optional: commit graph.json + GRAPH_REPORT.md so teammates and future
+# Claude Code sessions get instant context without re-running.
+```
 
 ---
 
@@ -236,6 +345,7 @@ Note: If Claude Code asks what to do, reply:
 | **Playwright CLI** | Browser testing (4x efficient) | Testing, deploying |
 | **Chrome DevTools** | Console, network, performance | Debugging browser issues |
 | **Vercel Guidelines** | 100+ UX/accessibility rules | UI quality checks |
+| **Graphify** *(opt-in)* | Codebase knowledge graph (~71× cheaper structural queries) | Asking about existing code structure on big projects |
 
 ---
 
@@ -291,6 +401,29 @@ bash ~/Desktop/nexalance-kit/setup-project-wing.sh "beta" "Project Beta" "client
 
 # Switching: just open the folder → Claude Code loads correct wing
 ```
+
+---
+
+## 🩺 MemPalace not working? Run the diagnostic first.
+
+The single most common issue is that `python` (bare command) doesn't resolve to Python 3 on your machine — common on macOS pyenv users, modern macOS without legacy aliases, and python3-only Linux. Older kit versions hardcoded `python -m mempalace.mcp_server` in MCP and hook commands, which silently failed.
+
+**Diagnose any MemPalace problem in 5 seconds:**
+```bash
+cd ~/projects/your-project
+bash ~/Desktop/nexalance-kit/diagnose-mempalace.sh
+```
+The script runs **12 checks** across all layers (Python interpreter, mempalace install, MCP registration, project .mcp.json, hooks, PROJECT_WING value, wing data, MCP server liveness, etc.) and prints **prioritized root causes** with the exact fix command for each.
+
+**v4.4 LITE+ fixes** (auto-applied if you re-run `setup-nexalance.sh` and `setup-project-wing.sh`):
+- Auto-detects working Python 3 interpreter, uses absolute path everywhere
+- Removes duplicate project-level MCP entry (was conflicting with user-level)
+- Hook errors now log to `~/.mempalace-hook.log` instead of `/dev/null` (silent failures eliminated)
+- Wing init errors are visible
+- Refuses to use placeholder wing names like `"project-wing-name"`
+- Wing seeded with 4 triples on init (project, client, status, tier) so `mempalace_search` returns data immediately
+
+For full symptom→cause→fix reference, see [`playbooks/mempalace-troubleshooting.md`](playbooks/mempalace-troubleshooting.md).
 
 ---
 
@@ -359,6 +492,35 @@ echo '{}' > .mcp.json
 
 ---
 
+## 🔄 Migrating an existing project from v4.3 → v4.4 LITE
+
+**One command (recommended):**
+```bash
+cd ~/projects/your-existing-project
+bash ~/Desktop/nexalance-kit/migrate-to-v44.sh standard   # or: lite | full
+```
+
+The script auto-detects your existing `PROJECT_WING`, `PROJECT_NAME`, and `CLIENT`, backs everything up to `.nexalance-backup-<timestamp>/`, installs the LITE core + playbooks + hooks, upgrades `SESSION.md` to include the Feature Tracker (for Lite/Standard tiers), and runs 6 verification checks before declaring success.
+
+**Idempotent:** running it twice on an already-migrated project aborts safely instead of overwriting.
+
+**Manual fallback (if you prefer step-by-step):**
+```bash
+cp CLAUDE.md CLAUDE-v4.3-backup.md
+cp ~/Desktop/nexalance-kit/NexaLance-CLAUDE-v4.4-LITE.md ./CLAUDE.md
+cp -r ~/Desktop/nexalance-kit/playbooks ./playbooks
+bash ~/Desktop/nexalance-kit/setup-project-wing.sh "your-wing" "Project Name" "client" standard
+```
+
+**Roll back if needed (paths in script output):**
+```bash
+cp .nexalance-backup-<timestamp>/CLAUDE.md.v43 CLAUDE.md
+cp .nexalance-backup-<timestamp>/settings.json.v43 .claude/settings.json
+rm -rf playbooks/ .claude/hooks/
+```
+
+---
+
 ## 📈 Version History
 
 | Version | Lines | Score | Key Addition |
@@ -368,7 +530,9 @@ echo '{}' > .mcp.json
 | v4.0 | 1,409 | 9.6/10 | Deep focus, action testing, self-review, memory |
 | v4.1 | 1,641 | 9.6/10 | Superpowers + MemPalace + Official plugins |
 | v4.2 | 1,793 | 8.4/10 | Playwright CLI + Chrome DevTools |
-| **v4.3** | **2,350+** | **9.2/10** | Design system, conflict resolution, file organization |
+| v4.3 | 2,350+ | 9.2/10 | Design system, conflict resolution, file organization |
+| v4.4 LITE | core ~530 + playbooks ~2,000 | 8.4/10 | Token-optimized: slim core + lazy-loaded playbooks, tiered Phase 0, risk-tiered review, inline self-review, Haiku dispatch (~70% fewer tokens, zero quality compromise) |
+| **v4.4 LITE+** | **+ hooks/ + migration** | **9.0/10** | **Post-review hardening: tier-aware feature tracking (Lite/Standard get SESSION.md Feature Tracker), routing enforcement hook (warns if >2 playbooks/turn), cache-break warning hook, idempotent migration script with auto-detection + backup + 6-check verification** |
 
 ---
 

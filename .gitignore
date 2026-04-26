@@ -1,0 +1,28 @@
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor noise
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.python-version
+
+# Node
+node_modules/
+*.log
+
+# Backups created by migrate-to-v44.sh
+.nexalance-backup-*/
+
+# Per-project state (shouldn't ever land here, but defense-in-depth)
+.claude/.playbook-counter
+.mempalace-hook.log
+graphify-out/cache/

@@ -31,11 +31,35 @@ if ! command -v claude &> /dev/null; then
 fi
 success "Claude Code CLI found"
 
-if ! command -v python3 &> /dev/null && ! command -v python &> /dev/null; then
-    fail "Python not found. Install Python 3.9+"
+# ─── Detect a WORKING Python 3 interpreter (critical for MCP) ───
+# Many failures come from hardcoding `python` when only python3 works
+# (pyenv users, modern macOS, python3-only systems). We pick the one that
+# actually executes and use it consistently for ALL mempalace commands.
+PY_BIN=""
+for cand in python3 python; do
+    if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)' 2>/dev/null; then
+        PY_BIN="$cand"
+        break
+    fi
+done
+
+if [ -z "$PY_BIN" ]; then
+    fail "No working Python 3.x interpreter found."
+    fail "  Install Python 3.10+ first: brew install python  OR  pyenv install 3.11 && pyenv global 3.11"
     exit 1
 fi
-success "Python found"
+success "Python 3 interpreter: $PY_BIN ($("$PY_BIN" --version 2>&1))"
+
+# Pick a matching pip
+PIP_BIN=""
+for cand in "${PY_BIN}-pip" pip3 pip; do
+    if command -v "$cand" >/dev/null 2>&1; then
+        PIP_BIN="$cand"
+        break
+    fi
+done
+[ -z "$PIP_BIN" ] && PIP_BIN="$PY_BIN -m pip"
+success "Pip command: $PIP_BIN"
 
 if ! command -v node &> /dev/null; then
     fail "Node.js not found. Install Node.js 18+"
@@ -51,21 +75,38 @@ success "Git found"
 
 echo ""
 
-# ─── Step 2: Install MemPalace ───
-echo "📋 Step 2: Installing MemPalace (persistent memory)..."
+# ─── Step 2: Install MemPalace into the DETECTED Python ───
+echo "📋 Step 2: Installing MemPalace into $PY_BIN..."
 
-if pip install mempalace 2>/dev/null || pip3 install mempalace 2>/dev/null; then
-    success "MemPalace installed"
+# Prefer pip with --user so we don't need sudo and avoid system-Python conflicts.
+# Try with no flags first (works for venvs + pipx-shimmed pythons), then --user, then --break-system-packages on PEP 668 systems.
+if $PIP_BIN install mempalace 2>/dev/null \
+   || $PIP_BIN install --user mempalace 2>/dev/null \
+   || $PIP_BIN install --break-system-packages mempalace 2>/dev/null; then
+    success "mempalace package installed"
 else
-    warn "MemPalace pip install failed. Try manually: pip install mempalace"
+    fail "mempalace pip install failed. Run manually:  $PIP_BIN install --user mempalace"
+    exit 1
 fi
 
-# Initialize MemPalace
-if command -v mempalace &> /dev/null; then
-    mempalace init 2>/dev/null || true
-    success "MemPalace initialized"
+# Verify importable from THE SAME interpreter we'll use for MCP/hooks
+if "$PY_BIN" -c "import mempalace" 2>/dev/null; then
+    VER=$("$PY_BIN" -c "import mempalace; print(getattr(mempalace, '__version__', '?'))" 2>/dev/null)
+    success "mempalace importable from $PY_BIN (v$VER)"
 else
-    warn "MemPalace CLI not found in PATH. May need: python -m mempalace init"
+    fail "mempalace installed but NOT importable from $PY_BIN."
+    fail "  This is the #1 cause of MCP failures — the install Python differs from the runtime Python."
+    fail "  Try:  $PY_BIN -m pip install --user mempalace"
+    exit 1
+fi
+
+# Initialize MemPalace data directory
+if "$PY_BIN" -m mempalace init 2>/dev/null; then
+    success "MemPalace data directory initialized"
+elif command -v mempalace >/dev/null 2>&1 && mempalace init 2>/dev/null; then
+    success "MemPalace data directory initialized (via mempalace CLI)"
+else
+    warn "MemPalace init had issues — will be created on first use"
 fi
 
 echo ""
@@ -83,11 +124,16 @@ claude plugin install superpowers@superpowers-marketplace 2>/dev/null && \
     success "Superpowers installed" || \
     warn "Superpowers — run manually in Claude Code: /plugin install superpowers@superpowers-marketplace"
 
-echo "  → Installing MemPalace plugin..."
-claude plugin marketplace add milla-jovovich/mempalace 2>/dev/null && \
-claude plugin install --scope user mempalace 2>/dev/null && \
-    success "MemPalace plugin installed" || \
-    warn "MemPalace plugin — run manually: claude plugin install --scope user mempalace"
+# NOTE: We do NOT install the mempalace plugin here.
+# The plugin registers its own MCP entry that conflicts with our explicit
+# `claude mcp add mempalace` (Step 4). Both end up in `claude mcp list` and
+# both can fail. The explicit MCP registration is the supported path.
+#
+# If you previously installed the plugin and see `plugin:mempalace:mempalace`
+# in `claude mcp list` showing "Failed to connect", remove it:
+#   claude plugin uninstall mempalace
+echo "  → Skipping mempalace plugin install (use explicit MCP registration instead)"
+success "MemPalace will be wired via 'claude mcp add' in Step 4"
 
 echo "  → Installing Anthropic Official Plugins..."
 claude plugin install code-review@claude-plugins-official 2>/dev/null && \
@@ -139,12 +185,29 @@ npx skills add vercel-labs/agent-skills 2>/dev/null && \
 
 echo ""
 
-# ─── Step 4: Configure MemPalace MCP (user-level) ───
-echo "📋 Step 4: Configuring MCP servers (user-level)..."
+# ─── Step 4: Configure MemPalace MCP (user-level, with DETECTED interpreter) ───
+echo "📋 Step 4: Configuring MemPalace MCP (user-level)..."
 
-claude mcp add mempalace --scope user -- python -m mempalace.mcp_server 2>/dev/null && \
-    success "MemPalace MCP configured (user-level)" || \
-    warn "MemPalace MCP — run manually: claude mcp add mempalace --scope user -- python -m mempalace.mcp_server"
+# Resolve to absolute path so MCP doesn't depend on shell PATH at server start
+PY_ABS=$(command -v "$PY_BIN")
+
+# Remove any existing entry first (avoid stale config with wrong interpreter)
+claude mcp remove mempalace --scope user 2>/dev/null || true
+
+# Register with the detected absolute path — errors are NOT silenced this time
+if claude mcp add mempalace --scope user -- "$PY_ABS" -m mempalace.mcp_server; then
+    success "MemPalace MCP registered (user-level) using: $PY_ABS -m mempalace.mcp_server"
+else
+    fail "MemPalace MCP registration failed. Run manually:"
+    fail "  claude mcp add mempalace --scope user -- $PY_ABS -m mempalace.mcp_server"
+fi
+
+# Quick liveness probe
+if claude mcp list 2>&1 | grep -q "mempalace.*Connected"; then
+    success "MemPalace MCP shows 'Connected' in claude mcp list"
+elif claude mcp list 2>&1 | grep -q "mempalace.*Failed"; then
+    warn "MemPalace MCP shows 'Failed' — run: bash diagnose-mempalace.sh"
+fi
 
 echo ""
 
@@ -164,29 +227,31 @@ fi
 if [ -f "$SETTINGS_FILE" ] && grep -q "mempalace" "$SETTINGS_FILE" 2>/dev/null; then
     success "MemPalace hooks already configured"
 else
-    # Add hooks using Python to safely merge JSON
-    python3 -c "
+    # Add hooks using Python to safely merge JSON.
+    # Critical: hooks use the DETECTED interpreter (not bare `python`) and
+    # log failures to a file instead of swallowing them silently.
+    PY_FOR_HOOKS="$PY_ABS" "$PY_BIN" - <<PYEOF
 import json, os
 
+PY = os.environ['PY_FOR_HOOKS']
 settings_file = os.path.expanduser('~/.claude/settings.json')
 settings = {}
 
 if os.path.exists(settings_file):
-    with open(settings_file) as f:
-        try:
+    try:
+        with open(settings_file) as f:
             settings = json.load(f)
-        except:
-            settings = {}
+    except Exception:
+        settings = {}
 
-# Add hooks
-if 'hooks' not in settings:
-    settings['hooks'] = {}
+settings.setdefault('hooks', {})
 
+# Save hook — failures log to ~/.mempalace-hook.log instead of being lost
 settings['hooks']['Stop'] = [{
     'matcher': '',
     'hooks': [{
         'type': 'command',
-        'command': 'python -m mempalace.hooks.save_hook 2>/dev/null || true'
+        'command': f'{PY} -m mempalace.hooks.save_hook 2>>~/.mempalace-hook.log || true'
     }]
 }]
 
@@ -194,7 +259,7 @@ settings['hooks']['PreCompact'] = [{
     'matcher': '',
     'hooks': [{
         'type': 'command',
-        'command': 'python -m mempalace.hooks.precompact_hook 2>/dev/null || true'
+        'command': f'{PY} -m mempalace.hooks.precompact_hook 2>>~/.mempalace-hook.log || true'
     }]
 }]
 
@@ -202,8 +267,13 @@ os.makedirs(os.path.dirname(settings_file), exist_ok=True)
 with open(settings_file, 'w') as f:
     json.dump(settings, f, indent=2)
 
-print('Hooks configured successfully')
-" 2>/dev/null && success "Auto-save hooks configured" || warn "Hooks — configure manually in ~/.claude/settings.json"
+print('Hooks written successfully using interpreter:', PY)
+PYEOF
+    if [ $? -eq 0 ]; then
+        success "Auto-save hooks configured (interpreter: $PY_ABS, errors log to ~/.mempalace-hook.log)"
+    else
+        warn "Hooks — configure manually in ~/.claude/settings.json"
+    fi
 fi
 
 echo ""
