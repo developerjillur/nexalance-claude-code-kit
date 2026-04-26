@@ -64,8 +64,7 @@ A production-ready CLAUDE.md system that solves the biggest pains of running Cla
 
 ```
 nexalance-claude-code-kit/
-├── NexaLance-CLAUDE-v4.4-LITE.md       ⭐ Slim core (~6K tokens) — RECOMMENDED
-├── NexaLance-CLAUDE-v4.3-FINAL.md       Legacy monolith (~24K tokens)
+├── NexaLance-CLAUDE-v4.4-LITE.md       Slim core (~6K tokens)
 │
 ├── playbooks/                           11 lazy-loaded modules
 │   ├── phase-0.md                       Phase 0 doc generation (tier-aware)

@@ -77,16 +77,18 @@ echo "✅ Created docs/ (reviews, analysis, plans) + .claude/ + .screenshots/"
 # Check CLAUDE.md exists
 if [ ! -f "CLAUDE.md" ]; then
     echo "❌ CLAUDE.md not found!"
-    echo "   Copy a CLAUDE.md template first. Choose ONE:"
-    echo "   • v4.4 LITE (recommended — token-optimized, ~70% fewer tokens):"
+    echo "   Copy the v4.4 LITE template first:"
     echo "     cp /path/to/nexalance-kit/NexaLance-CLAUDE-v4.4-LITE.md ./CLAUDE.md"
     echo "     cp -r /path/to/nexalance-kit/playbooks ./playbooks"
-    echo "   • v4.3 FINAL (legacy, single monolithic file):"
-    echo "     cp /path/to/nexalance-kit/NexaLance-CLAUDE-v4.3-FINAL.md ./CLAUDE.md"
+    echo ""
+    echo "   (For migrating an existing v4.3-based project,"
+    echo "    use: bash /path/to/nexalance-kit/migrate-to-v44.sh)"
     exit 1
 fi
 
-# Detect template version (v4.4 LITE expects sibling playbooks/ folder in project)
+# Detect template version. v4.4 LITE is the supported path.
+# Legacy v4.3-based CLAUDE.md is still recognized so this script can be
+# safely re-run on older projects (use migrate-to-v44.sh to upgrade them).
 if grep -q "v4.4 LITE" CLAUDE.md; then
     TEMPLATE_VERSION="v4.4-LITE"
     if [ ! -d "playbooks" ]; then
@@ -94,7 +96,9 @@ if grep -q "v4.4 LITE" CLAUDE.md; then
         echo "   Copy it: cp -r /path/to/nexalance-kit/playbooks ./playbooks"
     fi
 else
-    TEMPLATE_VERSION="v4.3-FINAL"
+    TEMPLATE_VERSION="v4.3-legacy"
+    echo "ℹ️  Detected legacy v4.3-style CLAUDE.md — to upgrade to v4.4 LITE:"
+    echo "    bash /path/to/nexalance-kit/migrate-to-v44.sh standard"
 fi
 echo "✅ Detected CLAUDE.md template: $TEMPLATE_VERSION"
 
