@@ -1,11 +1,11 @@
-# NexaLance Claude Code Kit — v4.4 LITE+
+# NexaLance Claude Code Kit — v4.5 (Auto-Wiki)
 
 > **The complete AI development operating system for Claude Code.**
 > Token-optimized, quality-preserved, production-hardened.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-orange.svg)](https://claude.ai/code)
-[![Version](https://img.shields.io/badge/version-v4.4_LITE%2B-success)](https://github.com/developerjillur/nexalance-claude-code-kit/releases)
+[![Version](https://img.shields.io/badge/version-v4.5-success)](https://github.com/developerjillur/nexalance-claude-code-kit/releases)
 [![Token Reduction](https://img.shields.io/badge/tokens-70%25_reduction-brightgreen)](#token-savings)
 [![Plugins](https://img.shields.io/badge/Plugins-8_Integrated-green.svg)](#integrated-plugins)
 
@@ -27,14 +27,29 @@ A production-ready CLAUDE.md system that solves the biggest pains of running Cla
 | Multi-project context bleed | **MemPalace Wings** — fully isolated memory per project |
 | Tokens balloon on large codebases | **Optional Graphify** — knowledge-graph queries, ~71× cheaper than re-reading files |
 | No enforcement of token rules | **Runtime hooks** — playbook-tracker, cache-warn, reset-counter |
+| Past prompts/discussions/research scatter and get lost | **Auto-LLM-Wiki** ([Karpathy pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)) — `docs/wiki/` auto-scaffolds, sessions auto-ingest via hooks, synthesis on demand |
 
 ---
 
-## ⭐ What's New in v4.4 LITE+
+## ⭐ What's New in v4.5 (Auto-Wiki)
 
-### Token-optimized
+### NEW: LLM Wiki layer — fully automatic, zero manual operation
 
-- **Slim CLAUDE.md core** (~6K tokens, was ~24K in v4.3) + **11 lazy-loaded playbooks** read only when relevant
+[Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) baked into the kit. Every project automatically gets a `docs/wiki/` knowledge base that compounds over time:
+
+- **Auto-ingest hook (zero LLM tokens):** `SessionStart` + `SessionEnd` hooks fire `wiki-ingest.py` which converts Claude Code session JSONL transcripts → markdown into `docs/wiki/raw/discussions/`. Idempotent, ~50ms idle, basic secret redaction (sk-…, ghp_…, AKIA…, Bearer …).
+- **Auto-scaffold:** `setup-project-wing.sh` creates the full `docs/wiki/` structure (CLAUDE.md schema, index.md, log.md, raw/{discussions,prompts,articles,interviews,inbox}, synthesized/{_entities}) at project init.
+- **Auto-backfill:** at end of setup, the hook runs once to convert any pre-existing sessions for that project — wiki starts populated.
+- **On-demand synthesis** (Claude does it, not the user): when `.synthesis-pending` exists OR user asks a domain/recall question, Claude reads `index.md` first, drills 2-4 relevant pages, cites raw sources. See `playbooks/llm-wiki.md`.
+- **Privacy-aware defaults:** `raw/discussions/` and `raw/interviews/` gitignored (may contain secrets). `synthesized/`, `index.md`, `log.md` are committed.
+
+**The user never has to run anything.** Hooks handle plumbing. Claude handles thinking.
+
+### From v4.4 LITE+ (still all in)
+
+#### Token-optimized
+
+- **Slim CLAUDE.md core** (~6K tokens, was ~24K in v4.3) + **12 lazy-loaded playbooks** read only when relevant
 - **Tier-aware Phase 0**: `lite` (3 docs) / `standard` (6, default) / `full` (9), instead of always-9
 - **Risk-tiered review**: inline 5-question check by default, escalates to 5-agent `/code-review` only for security-sensitive / pre-PR
 - **Inline self-review** — saves an LLM round-trip per task; full 7-category fallback still available when escalated
@@ -43,19 +58,20 @@ A production-ready CLAUDE.md system that solves the biggest pains of running Cla
 
 **Verified token math:** typical session **80–120K → 25–40K** (~65–70% reduction). Quality bar preserved — every v4.3 rule is either in the slim core or in a lazy-loaded playbook.
 
-### Production-hardened
+#### Production-hardened
 
-- **`hooks/` runtime enforcement** (3 scripts auto-installed by setup):
+- **`hooks/` runtime enforcement** (4 scripts auto-installed by setup):
+  - `wiki-ingest.py` — auto-converts session JSONL → wiki markdown (NEW)
   - `playbook-tracker.sh` — counts playbook reads/turn, warns if > 2
   - `cache-warn.sh` — warns when CLAUDE.md is edited mid-session (would break prompt cache)
   - `reset-counter.sh` — resets per-turn counter on each user prompt
-- **Tier-aware Feature Tracker** in SESSION.md for Lite/Standard tiers (closes a real gap from v4.3)
-- **MemPalace reliability fixes** — auto-detects working Python 3, uses absolute paths, eliminates silent hook failures (root cause of the "MemPalace sometimes doesn't work" reports)
+- **Tier-aware Feature Tracker** in SESSION.md for Lite/Standard tiers
+- **MemPalace reliability fixes** — auto-detects working Python 3, uses absolute paths, eliminates silent hook failures
 
-### New tools
+#### Tools
 
 - **`diagnose-mempalace.sh`** — 12-check health diagnostic; pinpoints the exact failing layer with the exact fix command
-- **`migrate-to-v44.sh`** — idempotent v4.3 → v4.4 LITE migration; auto-detects existing wing config, full backup, 6-check verification, safe rollback
+- **`migrate-to-v44.sh`** — idempotent v4.3 → v4.x migration; auto-detects existing wing config, full backup, **8-check** verification (NEW: wiki + wiki-ingest checks), safe rollback
 - **`setup-graphify.sh`** — optional Graphify codebase knowledge graph integration (~71× cheaper structural queries on large codebases)
 
 ---
@@ -66,7 +82,7 @@ A production-ready CLAUDE.md system that solves the biggest pains of running Cla
 nexalance-claude-code-kit/
 ├── NexaLance-CLAUDE-v4.4-LITE.md       Slim core (~6K tokens)
 │
-├── playbooks/                           11 lazy-loaded modules
+├── playbooks/                           12 lazy-loaded modules
 │   ├── phase-0.md                       Phase 0 doc generation (tier-aware)
 │   ├── feature-workflow.md              Feature implementation + phase-based dev
 │   ├── testing.md                       Action-Level Testing protocol
@@ -77,9 +93,11 @@ nexalance-claude-code-kit/
 │   ├── plugin-orchestration.md          Plugin priority + conflict matrix
 │   ├── patterns.md                      Common + anti-patterns
 │   ├── operations.md                    File routing + deployment + rollback
-│   └── mempalace-troubleshooting.md     Symptom → cause → fix reference
+│   ├── mempalace-troubleshooting.md     Symptom → cause → fix reference
+│   └── llm-wiki.md                      LLM Wiki ingest/query/lint workflow (Karpathy pattern)
 │
-├── hooks/                               3 runtime enforcement scripts
+├── hooks/                               4 runtime scripts (auto-installed per project)
+│   ├── wiki-ingest.py                   Auto-converts Claude session JSONL → wiki markdown
 │   ├── playbook-tracker.sh              Counts playbook reads/turn
 │   ├── cache-warn.sh                    Warns on mid-session CLAUDE.md edits
 │   └── reset-counter.sh                 Resets per-turn counter
@@ -180,17 +198,63 @@ Need a doc your tier didn't generate? Generate it on demand later — no need to
 
 ---
 
-## 🪝 Runtime Hooks (v4.4 LITE+)
+## 🪝 Runtime Hooks (auto-installed)
 
-Auto-installed by `setup-project-wing.sh` into `.claude/hooks/`. Wired into `.claude/settings.json` for the project. They observe and warn — they never block.
+Auto-installed by `setup-project-wing.sh` into `.claude/hooks/`. Wired into `.claude/settings.json`. They observe, warn, and ingest — they never block.
 
 | Hook | Fires on | What it does |
 |------|----------|--------------|
-| `playbook-tracker.sh` | `Read` of `playbooks/*.md` | Counts reads/turn, prints warning if > 2 |
+| `wiki-ingest.py` ⭐ | `SessionStart`, `SessionEnd` | Converts Claude Code session JSONL → markdown into `docs/wiki/raw/discussions/`. Idempotent, ~50ms idle, secret redaction. |
+| `playbook-tracker.sh` | `Read` of `playbooks/*.md` | Counts reads/turn, warns if > 2 |
 | `cache-warn.sh` | `Edit/Write` of `CLAUDE.md` or playbooks | Warns about prompt-cache invalidation |
 | `reset-counter.sh` | `UserPromptSubmit` | Resets per-turn playbook counter |
 
-Counter state lives at `.claude/.playbook-counter` (gitignored). Run `cat .claude/.playbook-counter` mid-session to see how many playbooks Claude read in the current turn — single best signal that token budget is healthy.
+Diagnostic files:
+- `.claude/.playbook-counter` — current-turn playbook read count
+- `docs/wiki/.ingest.log` — wiki-ingest history + errors
+- `docs/wiki/.ingest-manifest.json` — processed session IDs (idempotency)
+- `docs/wiki/.synthesis-pending` — flag set when new content awaits synthesis
+
+---
+
+## 📚 Auto-LLM-Wiki (v4.5)
+
+Every project gets a `docs/wiki/` per-project knowledge base, fully automatic.
+
+### How it runs (zero user action)
+
+1. **`setup-project-wing.sh` scaffolds** the structure at project init:
+   ```
+   docs/wiki/
+   ├── CLAUDE.md           (schema)
+   ├── index.md            (catalog)
+   ├── log.md              (audit)
+   ├── raw/                (immutable: discussions/, prompts/, articles/, interviews/, inbox/)
+   └── synthesized/        (LLM-curated pages + _entities/)
+   ```
+
+2. **Backfill on setup:** `wiki-ingest.py` runs once to convert any pre-existing Claude Code sessions for this project.
+
+3. **Continuous ingest:** `SessionStart` + `SessionEnd` hooks re-run `wiki-ingest.py` every time you open or close Claude Code in this project.
+
+4. **On-demand synthesis (Claude, not the user):** when `.synthesis-pending` exists or you ask a domain/recall question, Claude reads `index.md` first, drills 2–4 relevant pages, cites raw sources back. Workflow: `playbooks/llm-wiki.md`.
+
+### Privacy
+| Path | Committed? | Why |
+|------|-----------|------|
+| `docs/wiki/CLAUDE.md`, `index.md`, `log.md`, `synthesized/**` | ✅ yes | Schema + LLM-cleaned content |
+| `docs/wiki/raw/articles/`, `raw/prompts/` | ✅ yes | User-curated, vetted |
+| `docs/wiki/raw/discussions/`, `raw/interviews/` | ❌ gitignored | May contain secrets / PII |
+| `.ingest-manifest.json`, `.synthesis-pending`, `.ingest.log` | ❌ gitignored | Local state |
+
+### What it complements (not replaces)
+
+| Layer | Stores |
+|-------|--------|
+| MemPalace | Episodic conversation memory (wing-isolated per project) |
+| Graphify *(opt-in)* | Code semantic index (call graph, deps) |
+| **LLM Wiki** | **Compounding domain knowledge for THIS project** |
+| SESSION.md | Current task state |
 
 ---
 
@@ -461,7 +525,8 @@ This file is good news — it means hooks are firing and you can see what's fail
 | v4.1 | 1,641 | 9.6 | Superpowers + MemPalace + Official plugins |
 | v4.2 | 1,793 | 8.4 | Playwright CLI + Chrome DevTools |
 | v4.3 | 2,350+ | 9.2 | Design system, conflict resolution, file organization |
-| **v4.4 LITE+** | core ~530 + playbooks ~2,000 | **9.0** | **Token-optimized: slim core + lazy-loaded playbooks, tiered Phase 0, risk-tiered review, inline self-review, Haiku dispatch + post-review hardening: tier-aware feature tracking, routing enforcement hook, cache-break warning hook, idempotent migration script, MemPalace reliability fixes, 12-check diagnostic, Graphify integration** |
+| v4.4 LITE+ | core ~530 + playbooks ~2,000 | 9.0 | Token-optimized: slim core + lazy-loaded playbooks, tiered Phase 0, risk-tiered review, MemPalace reliability fixes |
+| **v4.5** | **+ docs/wiki/ auto-scaffold + wiki-ingest hook + llm-wiki playbook** | **9.2** | **Auto-LLM-Wiki: Karpathy pattern fully automated. Every project auto-scaffolds `docs/wiki/`, hooks auto-convert session JSONL → markdown, on-demand synthesis. Zero manual user action after setup.** |
 
 ---
 
