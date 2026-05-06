@@ -74,6 +74,12 @@ esac
 mkdir -p docs/{reviews,analysis,plans} .claude/commands .screenshots/{tests,reviews,deployments,bugs}
 echo "✅ Created docs/ (reviews, analysis, plans) + .claude/ + .screenshots/"
 
+# Scaffold the LLM Wiki layer (Karpathy pattern, fully automatic)
+mkdir -p \
+    docs/wiki/raw/{discussions,prompts,articles,interviews,inbox} \
+    docs/wiki/synthesized/_entities
+echo "✅ Created docs/wiki/ (raw + synthesized + LLM Wiki layer)"
+
 # Check CLAUDE.md exists
 if [ ! -f "CLAUDE.md" ]; then
     echo "❌ CLAUDE.md not found!"
@@ -165,9 +171,10 @@ if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ] && [ -d "$KIT_DIR/hooks" ]; then
     cp "$KIT_DIR/hooks/playbook-tracker.sh" .claude/hooks/ 2>/dev/null
     cp "$KIT_DIR/hooks/reset-counter.sh"    .claude/hooks/ 2>/dev/null
     cp "$KIT_DIR/hooks/cache-warn.sh"       .claude/hooks/ 2>/dev/null
-    chmod +x .claude/hooks/*.sh 2>/dev/null
+    cp "$KIT_DIR/hooks/wiki-ingest.py"      .claude/hooks/ 2>/dev/null
+    chmod +x .claude/hooks/*.sh .claude/hooks/*.py 2>/dev/null
     HOOKS_INSTALLED=1
-    echo "✅ v4.4 LITE hooks installed to .claude/hooks/"
+    echo "✅ v4.4 LITE hooks installed to .claude/hooks/ (4 scripts)"
 else
     HOOKS_INSTALLED=0
     if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ]; then
@@ -232,11 +239,33 @@ if [ "$HOOKS_INSTALLED" = "1" ]; then
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY_BIN_PLACEHOLDER .claude/hooks/wiki-ingest.py 2>>docs/wiki/.ingest.log || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY_BIN_PLACEHOLDER .claude/hooks/wiki-ingest.py 2>>docs/wiki/.ingest.log || true"
+          }
+        ]
+      }
     ]
   }
 }
 SETTINGS
-    echo "✅ Hooks wired into .claude/settings.json (MemPalace + playbook-tracker + cache-warn + reset-counter)"
+    echo "✅ Hooks wired into .claude/settings.json (MemPalace + playbook-tracker + cache-warn + reset-counter + wiki-ingest)"
 else
     # v4.3 legacy — original 2 hooks only
     cat > .claude/settings.json << 'SETTINGS'
@@ -446,12 +475,152 @@ __pycache__/
 .playwright-cli/
 .claude/.playbook-counter
 graphify-out/cache/
+
+# LLM Wiki — auto-ingested raw transcripts may contain secrets / PII.
+# Synthesized pages, articles, prompts, log.md, index.md ARE committed.
+docs/wiki/raw/discussions/
+docs/wiki/raw/interviews/
+docs/wiki/.ingest-manifest.json
+docs/wiki/.synthesis-pending
+docs/wiki/.ingest.log
 GITIGNORE
     git add -A
     git commit -m "chore: initialize $PROJECT_NAME workspace with NexaLance orchestrator"
     echo "✅ Git initialized"
 else
     echo "⚠️  Git already initialized"
+fi
+
+# ─── Scaffold LLM Wiki templates (v4.4 LITE only — playbook lives there) ─
+# These files are version-controlled and form the wiki's spine.
+# We only write them when the v4.4 LITE template is in use (it ships
+# the playbooks/llm-wiki.md that drives the workflow). For v4.3-legacy
+# projects, we skip the wiki layer entirely.
+if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ] && [ ! -f "docs/wiki/CLAUDE.md" ]; then
+    cat > docs/wiki/CLAUDE.md << WIKICLAUDE
+# Wiki Schema — $PROJECT_NAME
+
+This file is the schema for the project's LLM Wiki (Karpathy pattern).
+Read this when you operate on \`docs/wiki/\` — it defines conventions
+that keep the wiki disciplined and queryable.
+
+For the full workflow (ingest / query / lint), see
+\`playbooks/llm-wiki.md\` in the kit.
+
+## Layer purpose
+
+\`docs/wiki/\` is the **domain knowledge** layer for this project.
+It holds: research, references, decisions, glossaries, prompt
+patterns, and synthesized summaries of past Claude Code sessions.
+It is distinct from MemPalace (episodic), Graphify (code semantic),
+and SESSION.md (current state).
+
+## Folder structure
+
+\`\`\`
+docs/wiki/
+├── CLAUDE.md            ← this file (schema)
+├── index.md             ← catalog of every page (you maintain it)
+├── log.md               ← append-only audit (you + hook write here)
+├── raw/                 ← immutable sources, never edit content
+│   ├── discussions/     ← auto-ingested session transcripts (gitignored)
+│   ├── prompts/         ← raw prompts (frontmatter: worked/failed)
+│   ├── articles/        ← clipped articles, papers, screenshots
+│   ├── interviews/      ← customer/stakeholder interviews (gitignored)
+│   └── inbox/           ← unsorted drops; triage on demand
+└── synthesized/         ← LLM-generated wiki pages (committed)
+    ├── domain-glossary.md
+    ├── decision-log.md
+    ├── prompt-patterns.md
+    └── _entities/       ← per-entity pages
+\`\`\`
+
+## Frontmatter convention
+
+Every page in \`synthesized/\` should have:
+
+\`\`\`markdown
+---
+title: <human-readable title>
+type: <entity | concept | decision | reference | synthesis>
+tags: [<topic>, <topic>]
+last_updated: YYYY-MM-DD
+sources:
+  - ../raw/.../<file>.md
+---
+\`\`\`
+
+## Naming convention
+
+- \`synthesized/_entities/<lowercase-hyphenated>.md\` — one file per entity
+- \`synthesized/<topic>.md\` — single-page topics
+- \`raw/discussions/YYYY-MM-DD-<short-id>.md\` — auto-named by hook
+- \`raw/{prompts,articles,interviews}/YYYY-MM-DD-<slug>.md\`
+
+## Workflow triggers
+
+| When                                                | What you (Claude) do                                |
+|-----------------------------------------------------|------------------------------------------------------|
+| \`.synthesis-pending\` exists                        | Process pending raw → update synthesized + index    |
+| User asks a domain/recall question                  | Query: read \`index.md\` first, drill 2–4 pages     |
+| ≥5 unprocessed entries                              | Run lint pass (orphans, contradictions, duplicates) |
+| User drops a file in \`raw/inbox/\`                  | Triage: move to right folder + update synthesized   |
+
+Full workflow details: \`playbooks/llm-wiki.md\`.
+
+## What is auto vs. manual
+
+- **Hook (auto):** JSONL session transcripts → \`raw/discussions/\` markdown
+- **You (semi-auto):** synthesis from raw → wiki pages, index updates, lint
+- **User (manual):** dropping curated articles/prompts/interviews into \`raw/\`
+
+The user should never have to run anything. Hooks handle plumbing.
+You handle thinking.
+WIKICLAUDE
+    echo "✅ docs/wiki/CLAUDE.md schema written"
+fi
+
+if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ] && [ ! -f "docs/wiki/index.md" ]; then
+    cat > docs/wiki/index.md << WIKIINDEX
+# Wiki Index — $PROJECT_NAME
+
+Catalog of every page in this wiki. Auto-curated by Claude.
+Read this **first** when answering domain/recall questions.
+
+## Decisions
+*(populated as decisions are recorded)*
+
+## Entities
+*(populated as concepts/people/products are filed)*
+
+## References
+*(populated as articles/papers are ingested)*
+
+## Sessions
+*(populated as Claude Code sessions are auto-ingested)*
+
+---
+
+> Format: \`[Page Title](path/to/page.md) — one-line summary.\`
+> Sort within each section by relevance, not date.
+WIKIINDEX
+    echo "✅ docs/wiki/index.md scaffolded"
+fi
+
+if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ] && [ ! -f "docs/wiki/log.md" ]; then
+    cat > docs/wiki/log.md << WIKILOG
+# Wiki Log — $PROJECT_NAME
+
+Append-only chronological record of ingest, synthesize, query, and lint
+operations. Hook entries start with \`## [YYYY-MM-DD HH:MM] ingest |\`,
+synthesis entries with \`## [YYYY-MM-DD HH:MM] synthesize |\`, etc.
+
+---
+
+## [$(date '+%Y-%m-%d %H:%M')] init | wiki scaffolded for $PROJECT_NAME (tier: $TIER)
+
+WIKILOG
+    echo "✅ docs/wiki/log.md initialized"
 fi
 
 # Initialize MemPalace wing using the DETECTED interpreter.
@@ -491,6 +660,21 @@ case "$INIT_OUT" in
         ;;
 esac
 
+# ─── Backfill the wiki: ingest any pre-existing Claude Code sessions ───
+# Runs the wiki-ingest hook once at end of setup so the project starts
+# with all prior session transcripts already converted to markdown.
+# This is what makes the wiki "automatic from minute zero" — no need to
+# wait for the next SessionStart to populate raw/discussions/.
+if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ] && [ -f .claude/hooks/wiki-ingest.py ]; then
+    BACKFILL_OUT=$(CLAUDE_PROJECT_DIR="$(pwd)" "$PY_BIN" .claude/hooks/wiki-ingest.py 2>&1 || true)
+    INGESTED=$(ls docs/wiki/raw/discussions/*.md 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$INGESTED" -gt 0 ]; then
+        echo "✅ Wiki backfill: ingested $INGESTED prior session(s) into docs/wiki/raw/discussions/"
+    else
+        echo "✅ Wiki ready (no prior Claude Code sessions for this project to backfill)"
+    fi
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════"
 echo "🎉 DONE! Project workspace ready."
@@ -499,14 +683,15 @@ echo ""
 echo "📁 Your workspace:"
 echo "   CLAUDE.md          ← PROJECT_WING: \"$WING\" | TIER: \"$TIER\" ($TEMPLATE_VERSION)"
 echo "   .mcp.json          ← MemPalace + TaskMaster"
-echo "   .claude/settings.json ← Hooks: MemPalace$([ "$HOOKS_INSTALLED" = "1" ] && echo " + playbook-tracker + cache-warn + reset-counter")"
+echo "   .claude/settings.json ← Hooks: MemPalace$([ "$HOOKS_INSTALLED" = "1" ] && echo " + playbook-tracker + cache-warn + reset-counter + wiki-ingest")"
 if [ "$HOOKS_INSTALLED" = "1" ]; then
-echo "   .claude/hooks/     ← v4.4 LITE enforcement hooks (3 scripts)"
+echo "   .claude/hooks/     ← v4.4 LITE hooks (4 scripts including wiki-ingest)"
 fi
 echo "   .claude/commands/  ← Wing-aware orchestrator"
 echo "   docs/SESSION.md    ← Session tracker$([ "$TIER" != "full" ] && echo " (with Feature Tracker)")"
 echo "   docs/HANDOFF.md    ← Session handoff"
 if [ "$TEMPLATE_VERSION" = "v4.4-LITE" ]; then
+echo "   docs/wiki/         ← LLM Wiki (auto-ingest of sessions, synthesized knowledge)"
 echo "   playbooks/         ← Lazy-loaded modules (read on demand)"
 fi
 echo ""

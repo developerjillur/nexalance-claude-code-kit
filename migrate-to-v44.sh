@@ -192,14 +192,17 @@ echo ""
 echo "📋 Step 8: Verifying migration..."
 
 CHECKS_PASSED=0
-CHECKS_TOTAL=6
+CHECKS_TOTAL=8
 
 [ -f CLAUDE.md ] && grep -q "v4.4 LITE" CLAUDE.md && { success "CLAUDE.md is v4.4 LITE"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "CLAUDE.md is not v4.4 LITE"
-[ -d playbooks ] && [ "$(ls playbooks/*.md 2>/dev/null | wc -l | tr -d ' ')" = "10" ] && { success "playbooks/ has 10 files"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "playbooks/ incomplete"
+PB_COUNT=$(ls playbooks/*.md 2>/dev/null | wc -l | tr -d ' ')
+[ -d playbooks ] && [ "$PB_COUNT" -ge 11 ] && { success "playbooks/ has $PB_COUNT files (≥11 required)"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "playbooks/ incomplete (have $PB_COUNT, need ≥11)"
 [ -d .claude/hooks ] && [ -x .claude/hooks/playbook-tracker.sh ] && { success ".claude/hooks/ installed"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "hooks not installed"
-[ -f .claude/settings.json ] && grep -q "playbook-tracker" .claude/settings.json && { success "hooks wired in settings.json"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "hooks not wired"
+[ -f .claude/hooks/wiki-ingest.py ] && { success "wiki-ingest.py installed"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "wiki-ingest.py missing"
+[ -f .claude/settings.json ] && grep -q "playbook-tracker" .claude/settings.json && grep -q "wiki-ingest" .claude/settings.json && { success "hooks wired in settings.json (incl. wiki-ingest)"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "hooks not fully wired"
 grep -q "PROJECT_TIER" CLAUDE.md && { success "PROJECT_TIER set"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "PROJECT_TIER missing"
 [ -f docs/SESSION.md ] && { success "SESSION.md preserved/updated"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "SESSION.md missing"
+[ -f docs/wiki/CLAUDE.md ] && [ -f docs/wiki/index.md ] && { success "docs/wiki/ scaffolded (CLAUDE.md + index.md)"; CHECKS_PASSED=$((CHECKS_PASSED+1)); } || fail "docs/wiki/ not scaffolded"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
@@ -218,9 +221,12 @@ echo "      → copy feature rows into docs/SESSION.md → Feature Tracker"
 echo "      → optionally archive: mv docs/FEATURES.md $BACKUP_DIR/"
 echo "   3. Test in Claude Code: open project, type 'Continue'"
 echo "   4. Verify hooks fire: read a playbook, see playbook-tracker output in stderr"
+echo "   5. LLM Wiki backfill ran during setup — check docs/wiki/raw/discussions/"
+echo "      for converted session transcripts. Synthesis happens on demand"
+echo "      next time you ask Claude a domain/recall question."
 echo ""
 echo "🔙 Rollback (if needed):"
 echo "   cp $BACKUP_DIR/CLAUDE.md.v43 CLAUDE.md"
 echo "   cp $BACKUP_DIR/settings.json.v43 .claude/settings.json"
-echo "   rm -rf playbooks/"
+echo "   rm -rf playbooks/ .claude/hooks/ docs/wiki/"
 echo ""

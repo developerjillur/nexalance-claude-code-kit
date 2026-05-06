@@ -80,6 +80,7 @@ This CLAUDE.md core covers **what** to do. The playbooks cover **how**. Read a p
 | Session start/middle/end OR exit gate | `playbooks/session-management.md` | Including Exit Gate + Recovery |
 | Setting up MemPalace / memory issues | `playbooks/persistent-memory.md` | Install, hooks, wing protocol |
 | **MemPalace misbehaving** (failed connect, empty searches, memory not persisting) | `playbooks/mempalace-troubleshooting.md` | Symptom→cause→fix; first run `bash diagnose-mempalace.sh` |
+| **`docs/wiki/.synthesis-pending` exists** OR user asks domain/recall question OR file dropped in `docs/wiki/raw/inbox/` | `playbooks/llm-wiki.md` | Karpathy's LLM Wiki pattern, fully automatic ingest, on-demand synthesis |
 | Plugin conflict OR want full priority matrix | `playbooks/plugin-orchestration.md` | Detailed auto-trigger rules |
 | Implementing pagination/upload/cron/etc | `playbooks/patterns.md` | Common patterns + anti-patterns |
 | Saving artifacts, deploying, rolling back, resolving conflicts | `playbooks/operations.md` | File routing + Phase 5 + rollback + CONFLICTS.md |
@@ -441,11 +442,39 @@ If a feature touches anything in this list → it's "security-sensitive" → esc
 
 ---
 
+## 📚 LLM WIKI (per-project domain knowledge — fully automatic)
+
+The kit auto-scaffolds a per-project knowledge base at `docs/wiki/` (Karpathy pattern). **It runs without user action:**
+
+- **Hook (zero-token, automatic):** `SessionStart` and `SessionEnd` fire `.claude/hooks/wiki-ingest.py`, which converts Claude Code session JSONL transcripts into `docs/wiki/raw/discussions/*.md`. Idempotent, fast (~50ms idle), silent.
+- **Synthesis (you, on demand):** when `docs/wiki/.synthesis-pending` exists OR the user asks a domain/recall question, you process the queue per `playbooks/llm-wiki.md`.
+- **Layers stay distinct:** MemPalace = episodic conversation memory; Graphify = code semantic index; SESSION.md = current state; **Wiki = compounding domain knowledge for THIS project**.
+
+**Where to find things in `docs/wiki/`:**
+
+```
+docs/wiki/
+├── CLAUDE.md           ← wiki-internal schema (read it before operating on the wiki)
+├── index.md            ← catalog (read THIS first when querying)
+├── log.md              ← append-only audit
+├── raw/                ← immutable: discussions/, prompts/, articles/, interviews/, inbox/
+└── synthesized/        ← LLM-curated: decision-log, glossary, prompt-patterns, _entities/
+```
+
+**When you're answering a domain/recall question:** read `docs/wiki/index.md` FIRST, drill into 2–4 relevant pages, cite raw sources. **Never** re-read all raw discussions. That's the whole point.
+
+Privacy: `docs/wiki/raw/discussions/` and `raw/interviews/` are **gitignored by default** (transcripts may contain secrets). Synthesized pages, articles, prompts, log.md, index.md ARE committed.
+
+Full ingest/query/lint workflows: `playbooks/llm-wiki.md`.
+
+---
+
 ## 🕸️ CODEBASE KNOWLEDGE GRAPH (Graphify — optional add-on)
 
 **Layer model:**
 - **MemPalace** = episodic memory (decisions, conversations, what we did)
 - **Graphify** = semantic index (what the code IS — classes, deps, call graph)
+- **LLM Wiki** = compounding domain knowledge (`docs/wiki/`)
 - **SESSION.md** = current task state
 
 **Install (opt-in, once per machine):** `bash setup-graphify.sh`
